@@ -63,7 +63,10 @@ function PactolsQuery($ps_url) {
 	curl_setopt($vo_curl, CURLOPT_TIMEOUT, 120);
 	curl_setopt($vo_curl, CURLOPT_MAXREDIRS, 10);
 	curl_setopt($vo_curl, CURLOPT_USERAGENT, 'CollectiveAccess web service lookup');
-
+	$headers = array(
+        'Accept: application/json'
+    );
+    curl_setopt($vo_curl, CURLOPT_HTTPHEADER, $headers);
 	$vs_content = curl_exec($vo_curl);
 
 	if(!in_array(curl_getinfo($vo_curl, CURLINFO_HTTP_CODE), [200, 202])) {
@@ -142,27 +145,24 @@ class WLPlugInformationServicePactols Extends BaseInformationServicePlugin Imple
 
             $va_content = @json_decode($vs_content, true);
             $va_content=reset($va_content);
-            
             //extracting label
             foreach($va_content["http://www.w3.org/2004/02/skos/core#prefLabel"] as $label) {
-	            if($label["lang"]) == "en") {
+	            if($label["lang"] == "en") {
 		            $en_label = $label["value"];
 	            }
-	            if($label["lang"]) == "fr") {
+	            if($label["lang"] == "fr") {
 		            $fr_label = $label["value"];
 	            }
             }
             $label = ($fr_label ? $fr_label : $en_label);
 
-            $label=$va_content["ns1:mainHeadings"]["ns1:data"][0]["ns1:text"];
             $va_return['results'][] = array(
                 'label' => $label,
                 'url' => "https://ark.frantiq.fr/".$ps_search,
                 'idno' => $ps_search
             );
-            var_dump($va_return);die();
+            
         }
-//var_dump($va_return);die();
         return $va_return;
     }
 
@@ -175,17 +175,45 @@ class WLPlugInformationServicePactols Extends BaseInformationServicePlugin Imple
      * @return array An array of data from the data server defining the item.
      */
     public function getExtendedInformation($pa_settings, $ps_url) {
-        $xml_file = $ps_url."/Pactols.xml";
-        $xml = simplexml_load_file($xml_file);
-        $birthDate = date_create((string) $xml->children('ns1', true)->birthDate[0]);
-        //$birthDate=$xml->xpath("//ns1:birthDate");
-        $deathDate = date_create((string) $xml->children('ns1', true)->deathDate[0]);
-        //$deathDate=$xml->xpath("//ns1:deathDate");
-        $vs_display = "<p>Dates : ".date_format($birthDate,"d/m/Y")."-".date_format($deathDate,"d/m/Y")."</p>";
-        $vs_display .= "<p>XML : <a href='".$xml_file."'>".$xml_file."</a></p>";
-        $vs_display .= "<p>Pactols : <a href='".$ps_url."'>".$ps_url."</a></p>";
+        $vs_url = str_replace("https://ark.frantiq.fr/ark:","https://pactols.frantiq.fr/opentheso/api",$ps_url);
+        //https://ark.frantiq.fr/ark:/26678/pcrtVJZca9L0GP
+        //https://pactols.frantiq.fr/opentheso/api/26678/pcrtkOgxvd4Ijy
+        $vs_content = PactolsQuery($vs_url);
+        $va_content = @json_decode($vs_content, true);
+        $va_content=reset($va_content);
+            //extracting label
+        foreach($va_content["http://www.w3.org/2004/02/skos/core#prefLabel"] as $label) {
+            if($label["lang"] == "en") {
+	            $en_label = $label["value"];
+            }
+            if($label["lang"] == "fr") {
+	            $fr_label = $label["value"];
+            }
+        }
+        $label = ($fr_label ? $fr_label : $en_label);
+		$vs_parent_url = str_replace("https://ark.frantiq.fr/ark:","https://pactols.frantiq.fr/opentheso/api",reset($va_content["http://www.w3.org/2004/02/skos/core#broader"])["value"]);
+		$vs_parent_content = PactolsQuery($vs_parent_url);
+        $va_parent_content = @json_decode($vs_parent_content, true);
+        $va_parent_content = reset($va_parent_content);
+	        foreach($va_parent_content["http://www.w3.org/2004/02/skos/core#prefLabel"] as $parent_label) {
 
-        $vs_display .= ""; //"<p><a href='$ps_url' target='_blank'>$ps_url</a></p>";
+            if($parent_label["lang"] == "en") {
+	            $en_parent_label = $parent_label["value"];
+            }
+            if($parent_label["lang"] == "fr") {
+	            $fr_parent_label = $parent_label["value"];
+            }
+        }
+        $parent_label = ($fr_parent_label ? $fr_parent_label : $en_parent_label);
+         
+        $definition = "";  
+        if(isset($va_content["http://www.w3.org/2004/02/skos/core#definition"]) && isset(reset($va_content["http://www.w3.org/2004/02/skos/core#definition"])["value"])) {
+	        $definition = reset($va_content["http://www.w3.org/2004/02/skos/core#definition"])["value"];
+        }
+        $vs_display .= "<h3>(...) > ".$parent_label." > ".$label."</h3>";
+        $vs_display .= "<p><a href='$ps_url' target='_blank'>voir sur Frantiq</a></p>";
+        $vs_display .= "<p>Terme parent : ".reset($va_content["http://www.w3.org/2004/02/skos/core#broader"])["value"]."</p>";
+        $vs_display .= "<p>".$definition."</p>";
 
         return array('display' => $vs_display);
     }
