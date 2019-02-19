@@ -32,7 +32,7 @@
 
 /**
  * This file : IDEESCULTURE 2019
- * Created by Gautier MICHELIN
+ * Created by Gautier MICHELIN.
  */
 
 
